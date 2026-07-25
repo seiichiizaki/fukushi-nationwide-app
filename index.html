@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>福祉データベース — 全国対応 (オフライン / SQLite)</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <h1>福祉データベース <small>全国対応 / オフライン</small></h1>
+        <p class="tagline">
+          インターネット不要・ブラウザ完結の SQLite データ基盤
+        </p>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-num" id="stat-tables">0</span>
+          <span class="stat-label">テーブル</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num" id="stat-rows">0</span>
+          <span class="stat-label">総レコード</span>
+        </div>
+        <span id="dirty-flag" class="dirty" hidden>未保存の変更</span>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <button id="btn-save" class="btn primary" title="ブラウザ内 (IndexedDB) に保存">
+        💾 保存
+      </button>
+      <button id="btn-export" class="btn" title="SQLite ファイルとして書き出し">
+        ⬇ ファイル書出
+      </button>
+      <label class="btn" title="SQLite ファイルを読み込み">
+        ⬆ ファイル読込
+        <input type="file" id="file-open" accept=".sqlite,.db,.sqlite3" hidden />
+      </label>
+      <span class="spacer"></span>
+      <button id="btn-schema" class="btn" title="福祉アプリの基本スキーマを作成">
+        🏗 基本スキーマ作成
+      </button>
+      <button id="btn-reset" class="btn danger" title="全データを消去">
+        🗑 全消去
+      </button>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tab-import">📥 データ移行</button>
+      <button class="tab-btn" data-tab="tab-browse">📋 テーブル閲覧</button>
+      <button class="tab-btn" data-tab="tab-sql">⌨ SQL コンソール</button>
+      <button class="tab-btn" data-tab="tab-schema">🗂 スキーマ</button>
+    </nav>
+
+    <main>
+      <!-- =============== データ移行 =============== -->
+      <section id="tab-import" class="tab-panel">
+        <div id="drop-zone" class="drop-zone">
+          <p class="drop-title">CSV / JSON ファイルをここにドロップ</p>
+          <p class="hint">またはクリックして選択 — 既存アプリの書き出しデータを取り込みます</p>
+          <input type="file" id="import-file" accept=".csv,.tsv,.json,.txt" hidden />
+        </div>
+
+        <p id="import-empty" class="hint center">
+          ファイルを読み込むと、列の型を自動判定してプレビューを表示します。
+        </p>
+
+        <div id="import-config" hidden>
+          <div class="config-row">
+            <div>
+              <label>取込元</label>
+              <div id="import-source" class="mono"></div>
+            </div>
+            <div>
+              <label for="import-table-name">テーブル名</label>
+              <input id="import-table-name" type="text" />
+              <div id="mode-hint" class="hint"></div>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div>
+              <label>取込モード</label>
+              <div class="radio-group">
+                <label><input type="radio" name="import-mode" value="create" checked /> 新規作成</label>
+                <label><input type="radio" name="import-mode" value="replace" /> 置換 (既存を削除)</label>
+                <label><input type="radio" name="import-mode" value="append" /> 追記</label>
+              </div>
+            </div>
+            <div>
+              <label>オプション</label>
+              <label class="check"><input type="checkbox" id="import-add-id" checked /> 自動採番 id 列を付与</label>
+            </div>
+          </div>
+
+          <h3>列定義 (型を確認・変更できます)</h3>
+          <div class="grid-scroll">
+            <table id="col-editor">
+              <thead>
+                <tr><th>元の列名</th><th>格納列名</th><th>型</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h3>プレビュー</h3>
+          <div id="import-preview" class="grid-scroll"></div>
+
+          <div class="action-row">
+            <button id="btn-import-run" class="btn primary">この内容で取り込む</button>
+            <button id="btn-import-cancel" class="btn">キャンセル</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- =============== テーブル閲覧 =============== -->
+      <section id="tab-browse" class="tab-panel" hidden>
+        <div class="browse-controls">
+          <label>テーブル
+            <select id="browse-table"></select>
+          </label>
+          <label>検索
+            <input id="browse-search" type="text" placeholder="全列を横断検索" />
+          </label>
+        </div>
+        <div id="browse-body"></div>
+        <div id="browse-pager" class="pager" hidden>
+          <button id="browse-prev" class="btn">← 前</button>
+          <span id="browse-page-label">1 / 1</span>
+          <button id="browse-next" class="btn">次 →</button>
+          <span class="spacer"></span>
+          <span id="browse-count" class="hint"></span>
+        </div>
+      </section>
+
+      <!-- =============== SQL コンソール =============== -->
+      <section id="tab-sql" class="tab-panel" hidden>
+        <p class="hint">
+          任意の SQL を実行できます。SELECT は結果を表示、更新系 (INSERT/UPDATE/DELETE/DDL) は自動保存されます。
+          <kbd>Ctrl</kbd>+<kbd>Enter</kbd> で実行。
+        </p>
+        <textarea id="sql-input" spellcheck="false" placeholder="SELECT * FROM 利用者 LIMIT 100;"></textarea>
+        <div class="action-row">
+          <button id="btn-sql-run" class="btn primary">実行</button>
+        </div>
+        <div id="sql-result"></div>
+      </section>
+
+      <!-- =============== スキーマ =============== -->
+      <section id="tab-schema" class="tab-panel" hidden>
+        <div id="schema-body"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span id="status">読み込み中…</span>
+    </footer>
+
+    <!-- sql.js 本体 (ローカル同梱) -->
+    <script src="vendor/sql-wasm-data.js"></script>
+    <script src="vendor/sql-wasm.js"></script>
+    <!-- アプリ -->
+    <script src="js/db.js"></script>
+    <script src="js/importer.js"></script>
+    <script src="js/schema.js"></script>
+    <script src="js/ui.js"></script>
+  </body>
+</html>

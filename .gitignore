@@ -1,0 +1,18 @@
+# 依存パッケージ
+node_modules/
+
+# ビルド一時ファイル
+*.tgz
+package/
+
+# 書き出された SQLite データ本体（データは各端末で管理）
+*.sqlite
+*.sqlite3
+*.db
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
