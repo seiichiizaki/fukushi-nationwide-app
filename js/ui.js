@@ -32,6 +32,13 @@
     setupToolbar();
     setupImport();
     setupSql();
+    SateiUI.setup({
+      onDbChanged: () => {
+        refreshHeader();
+        refreshBrowseTables();
+        refreshSchema();
+      },
+    });
     refreshHeader();
     refreshBrowseTables();
     refreshSchema();
@@ -89,6 +96,7 @@
         $("#" + btn.dataset.tab).hidden = false;
         if (btn.dataset.tab === "tab-browse") refreshBrowseTables();
         if (btn.dataset.tab === "tab-schema") refreshSchema();
+        if (btn.dataset.tab === "tab-satei") SateiUI.refresh();
       });
     });
   }

@@ -51,6 +51,7 @@
       <button class="tab-btn active" data-tab="tab-import">📥 データ移行</button>
       <button class="tab-btn" data-tab="tab-browse">📋 テーブル閲覧</button>
       <button class="tab-btn" data-tab="tab-sql">⌨ SQL コンソール</button>
+      <button class="tab-btn" data-tab="tab-satei">📊 査定・返戻</button>
       <button class="tab-btn" data-tab="tab-schema">🗂 スキーマ</button>
     </nav>
 
@@ -148,6 +149,64 @@
         <div id="sql-result"></div>
       </section>
 
+      <!-- =============== 査定・返戻 (厚労省・支払基金 公表データ) =============== -->
+      <section id="tab-satei" class="tab-panel" hidden>
+        <div class="satei-head">
+          <div>
+            <p class="hint">
+              厚生労働省保険局・社会保険診療報酬支払基金・国保中央会・内閣府 (規制改革推進会議) が公表している
+              レセプト審査 (査定・返戻) の統計値を、出典付きでデータベースに取り込みます。
+              追加の公表値は「データ移行」タブから <code>査定返戻_統計</code> へ追記できます
+              (<code>sample-data/査定返戻_追加テンプレート.csv</code> 参照)。
+            </p>
+          </div>
+          <button id="btn-satei-seed" class="btn primary" title="公表データを投入 (再実行しても重複しません)">
+            📥 公表データを投入
+          </button>
+        </div>
+
+        <p id="satei-empty" class="hint center">
+          まだ公表データが投入されていません。「公表データを投入」を押してください。
+        </p>
+
+        <div id="satei-body" hidden>
+          <h3>全国水準 (KPI)</h3>
+          <div id="satei-kpi" class="kpi-grid"></div>
+
+          <h3>原審査 請求1万点当たり査定点数の推移 (支払基金・医科歯科計・各年11月審査分)</h3>
+          <div id="satei-trend" class="trend"></div>
+
+          <h3>自院の実績と全国水準の比較</h3>
+          <div id="satei-calc" class="calc-grid">
+            <label>請求件数 (件)<input id="calc-req-cnt" type="text" inputmode="numeric" placeholder="例: 1200" /></label>
+            <label>査定件数 (件)<input id="calc-sat-cnt" type="text" inputmode="numeric" placeholder="例: 15" /></label>
+            <label>請求点数 (点)<input id="calc-req-pt" type="text" inputmode="numeric" placeholder="例: 2500000" /></label>
+            <label>査定点数 (点)<input id="calc-sat-pt" type="text" inputmode="numeric" placeholder="例: 7000" /></label>
+            <label>受付件数 (件)<input id="calc-recv-cnt" type="text" inputmode="numeric" placeholder="返戻率の算出用" /></label>
+            <label>返戻件数 (件)<input id="calc-ret-cnt" type="text" inputmode="numeric" placeholder="返戻率の算出用" /></label>
+            <div class="calc-action"><button id="btn-satei-calc" class="btn primary">比較する</button></div>
+          </div>
+          <div id="satei-calc-result"></div>
+
+          <h3>支払基金 vs 国保連 (同一期間・同一指標)</h3>
+          <div id="satei-compare"></div>
+
+          <h3>公表統計 一覧</h3>
+          <div class="browse-controls">
+            <label>審査機関<select id="satei-filter-org"></select></label>
+            <label>指標<select id="satei-filter-metric"></select></label>
+            <label>審査区分<select id="satei-filter-kubun"></select></label>
+          </div>
+          <div id="satei-stats"></div>
+
+          <h3>都道府県 (支部) 別</h3>
+          <div id="satei-prefs"></div>
+
+          <h3>出典一覧</h3>
+          <div id="satei-sources"></div>
+        </div>
+      </section>
+
       <!-- =============== スキーマ =============== -->
       <section id="tab-schema" class="tab-panel" hidden>
         <div id="schema-body"></div>
@@ -165,6 +224,8 @@
     <script src="js/db.js"></script>
     <script src="js/importer.js"></script>
     <script src="js/schema.js"></script>
+    <script src="js/satei.js"></script>
+    <script src="js/satei-ui.js"></script>
     <script src="js/ui.js"></script>
   </body>
 </html>
