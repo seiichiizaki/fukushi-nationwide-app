@@ -61,9 +61,51 @@ CREATE TABLE IF NOT EXISTS 査定返戻_都道府県 (
     FOREIGN KEY (出典ID) REFERENCES 査定返戻_出典(出典ID)
 );
 
+-- 査定事由・返戻事由 マスタ (医科レセプト / 介護保険 / 障害福祉)
+CREATE TABLE IF NOT EXISTS 査定返戻_事由マスタ (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    制度      TEXT NOT NULL,       -- 医科レセプト / 介護保険 / 障害福祉
+    区分      TEXT NOT NULL,       -- 査定事由記号 / 返戻事由記号 / 返戻事由コード系統 / 返戻事由コード
+    コード    TEXT NOT NULL,       -- A〜K, L5006, 12P0, EG03 ...
+    名称      TEXT NOT NULL,
+    分類      TEXT,                -- 医学的判断 / 算定要件 / 事務的誤り / 資格 / 記載不備 / 台帳突合 / 給付管理 / 重複 / 審査委員会 / 点検
+    対応の目安 TEXT,
+    審査機関  TEXT,                -- 支払基金 / 国保連 / 共通
+    出典ID    TEXT,
+    備考      TEXT,
+    FOREIGN KEY (出典ID) REFERENCES 査定返戻_出典(出典ID)
+);
+
+-- 自院 (自事業所) の査定・返戻記録 (事由別集計用)
+CREATE TABLE IF NOT EXISTS 査定返戻_自院記録 (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    年月      TEXT NOT NULL,       -- 審査年月 YYYY-MM
+    制度      TEXT NOT NULL,
+    区分      TEXT NOT NULL,       -- 査定 / 返戻
+    審査機関  TEXT,
+    事由コード TEXT,               -- 査定返戻_事由マスタ.コード
+    事由      TEXT,                -- 自由記載
+    件数      INTEGER NOT NULL DEFAULT 0,
+    点数_単位数 REAL,              -- 医科: 点数 / 介護・障害: 単位数
+    備考      TEXT,
+    登録日時  TEXT DEFAULT (datetime('now','localtime'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_査定統計_機関期間 ON 査定返戻_統計(審査機関, 対象期間);
+CREATE INDEX IF NOT EXISTS idx_事由_制度区分     ON 査定返戻_事由マスタ(制度, 区分);
+CREATE INDEX IF NOT EXISTS idx_自院記録_年月     ON 査定返戻_自院記録(年月, 区分);
 CREATE INDEX IF NOT EXISTS idx_査定統計_指標     ON 査定返戻_統計(指標);
 CREATE INDEX IF NOT EXISTS idx_査定都道府県_期間 ON 査定返戻_都道府県(対象期間, 指標);
+
+-- 便利ビュー: 自院記録の事由別集計
+CREATE VIEW IF NOT EXISTS v_自院_事由別集計 AS
+SELECT r.制度, r.区分, r.事由コード,
+       COALESCE(MAX(m.名称), MAX(r.事由)) AS 事由,
+       SUM(r.件数) AS 件数, SUM(COALESCE(r.点数_単位数, 0)) AS 点数_単位数
+  FROM 査定返戻_自院記録 r
+  LEFT JOIN 査定返戻_事由マスタ m ON m.制度 = r.制度 AND m.コード = r.事由コード
+ GROUP BY r.制度, r.区分, r.事由コード
+ ORDER BY 件数 DESC;
 
 -- ---------------------------------------------------------------------
 -- 便利ビュー: 支払基金 vs 国保連 (同一期間・同一指標の横並び)

@@ -47,6 +47,18 @@ const SateiUI = (() => {
     $("#satei-filter-metric").addEventListener("change", renderStats);
     $("#satei-filter-kubun").addEventListener("change", renderStats);
     $("#btn-satei-calc").addEventListener("click", renderCalc);
+    $("#reason-filter-seido").addEventListener("change", renderReasons);
+    $("#reason-filter-kubun").addEventListener("change", renderReasons);
+    $("#reason-filter-q").addEventListener("input", renderReasons);
+    $("#rec-form").addEventListener("submit", addRecord);
+    $("#rec-seido").addEventListener("change", fillCodeList);
+    $("#rec-from").addEventListener("change", renderRecords);
+    $("#rec-to").addEventListener("change", renderRecords);
+    $("#rec-sum-kubun").addEventListener("change", renderRecords);
+    $("#rec-list").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-del]");
+      if (btn) deleteRecord(+btn.dataset.del);
+    });
     $$("#satei-calc input").forEach((inp) =>
       inp.addEventListener("keydown", (e) => {
         if (e.key === "Enter") renderCalc();
@@ -85,6 +97,7 @@ const SateiUI = (() => {
     $("#satei-empty").hidden = loaded;
     $("#satei-body").hidden = !loaded;
     if (!loaded) return;
+    if (Satei.ensureSchema()) onDbChanged();
     renderKpi();
     renderTrend();
     renderCompare();
@@ -93,6 +106,178 @@ const SateiUI = (() => {
     renderPrefs();
     renderSources();
     renderCalc();
+    populateReasonFilters();
+    renderReasons();
+    fillCodeList();
+    renderRecords();
+  }
+
+  /* ---------------- 査定事由・返戻事由 マスタ ---------------- */
+  function populateReasonFilters() {
+    const fill = (sel, col) => {
+      const cur = sel.value;
+      const vals = Database.query(
+        `SELECT DISTINCT ${col} AS v FROM 査定返戻_事由マスタ ORDER BY id`
+      ).map((r) => r.v);
+      sel.innerHTML =
+        '<option value="">(すべて)</option>' +
+        vals.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+      if (vals.includes(cur)) sel.value = cur;
+    };
+    fill($("#reason-filter-seido"), "制度");
+    fill($("#reason-filter-kubun"), "区分");
+  }
+
+  function renderReasons() {
+    if (!Satei.isLoaded()) return;
+    const conds = [];
+    const params = [];
+    const seido = $("#reason-filter-seido").value;
+    const kubun = $("#reason-filter-kubun").value;
+    const q = $("#reason-filter-q").value.trim();
+    if (seido) {
+      conds.push("m.制度=?");
+      params.push(seido);
+    }
+    if (kubun) {
+      conds.push("m.区分=?");
+      params.push(kubun);
+    }
+    if (q) {
+      conds.push("(m.コード LIKE ? OR m.名称 LIKE ? OR m.分類 LIKE ? OR m.対応の目安 LIKE ?)");
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    const where = conds.length ? " WHERE " + conds.join(" AND ") : "";
+    const rows = Database.query(
+      `SELECT m.*, o.発行元 FROM 査定返戻_事由マスタ m
+         LEFT JOIN 査定返戻_出典 o ON o.出典ID = m.出典ID ${where} ORDER BY m.id`,
+      params
+    );
+    let html =
+      '<div class="grid-scroll"><table><thead><tr><th>制度</th><th>区分</th><th>コード</th><th>内容</th><th>分類</th><th>対応の目安</th><th>審査機関</th><th>出典</th><th>備考</th></tr></thead><tbody>';
+    if (!rows.length) html += '<tr><td colspan="9" class="hint">該当なし</td></tr>';
+    rows.forEach((r) => {
+      html += `<tr><td>${esc(r.制度)}</td><td>${esc(r.区分)}</td><td class="mono"><strong>${esc(
+        r.コード
+      )}</strong></td><td class="note">${esc(r.名称)}</td><td>${esc(
+        r.分類
+      )}</td><td class="note">${esc(r.対応の目安)}</td><td>${esc(
+        r.審査機関
+      )}</td><td>${esc(r.発行元 || r.出典ID || "")}</td><td class="note">${esc(
+        r.備考
+      )}</td></tr>`;
+    });
+    html += "</tbody></table></div>";
+    html += `<p class="hint">${rows.length} 件</p>`;
+    $("#satei-reasons").innerHTML = html;
+  }
+
+  /* ---------------- 自院記録 ---------------- */
+  function fillCodeList() {
+    if (!Satei.isLoaded()) return;
+    const seido = $("#rec-seido").value;
+    const rows = Database.query(
+      "SELECT コード, 名称 FROM 査定返戻_事由マスタ WHERE 制度=? AND 区分 IN ('査定事由記号','返戻事由記号','返戻事由コード') ORDER BY id",
+      [seido]
+    );
+    $("#rec-code-list").innerHTML = rows
+      .map((r) => `<option value="${esc(r.コード)}">${esc(r.名称)}</option>`)
+      .join("");
+    // 制度に応じて審査機関の既定値を切り替える
+    $("#rec-org").value = seido === "医科レセプト" ? "支払基金" : "国保連";
+  }
+
+  async function addRecord(e) {
+    e.preventDefault();
+    const cnt = parseInt($("#rec-cnt").value, 10);
+    const pt = $("#rec-pt").value === "" ? null : parseFloat($("#rec-pt").value);
+    if (!$("#rec-ym").value || !Number.isFinite(cnt)) {
+      setStatus("審査年月と件数を入力してください。", true);
+      return;
+    }
+    try {
+      Satei.addRecord({
+        年月: $("#rec-ym").value,
+        制度: $("#rec-seido").value,
+        区分: $("#rec-kubun").value,
+        審査機関: $("#rec-org").value,
+        事由コード: $("#rec-code").value.trim(),
+        事由: $("#rec-reason").value.trim(),
+        件数: cnt,
+        点数_単位数: pt,
+        備考: $("#rec-note").value.trim(),
+      });
+      await Database.persist();
+      setStatus("記録を追加しました。");
+      $("#rec-cnt").value = "";
+      $("#rec-pt").value = "";
+      $("#rec-note").value = "";
+      onDbChanged();
+      renderRecords();
+    } catch (err) {
+      setStatus("追加に失敗: " + err.message, true);
+    }
+  }
+
+  async function deleteRecord(id) {
+    if (!confirm("この記録を削除しますか？")) return;
+    Satei.deleteRecord(id);
+    await Database.persist();
+    onDbChanged();
+    renderRecords();
+  }
+
+  function renderRecords() {
+    if (!Satei.isLoaded()) return;
+    const filter = {
+      from: $("#rec-from").value || null,
+      to: $("#rec-to").value || null,
+      区分: $("#rec-sum-kubun").value || null,
+    };
+    const sum = Satei.summarizeRecords(filter);
+    const wrap = $("#rec-summary");
+    if (!sum.length) {
+      wrap.innerHTML =
+        '<p class="hint">記録がありません。上のフォームから査定・返戻の件数を事由別に登録すると、ここに構成比が表示されます。</p>';
+    } else {
+      const max = Math.max(...sum.map((r) => r.件数));
+      let html =
+        '<div class="grid-scroll"><table><thead><tr><th>制度</th><th>区分</th><th>事由コード</th><th>事由</th><th>分類</th><th class="num">件数</th><th class="num">点数/単位数</th><th class="num">構成比</th><th>割合</th></tr></thead><tbody>';
+      sum.forEach((r) => {
+        const w = max ? Math.round((r.件数 / max) * 100) : 0;
+        html += `<tr><td>${esc(r.制度)}</td><td>${esc(r.区分)}</td><td class="mono">${esc(
+          r.事由コード
+        )}</td><td class="note">${esc(r.事由)}</td><td>${esc(r.分類 || "")}</td>
+          <td class="num">${fmtNum(r.件数, 0)}</td><td class="num">${fmtNum(
+          r.点数_単位数,
+          0
+        )}</td><td class="num">${fmtNum(r.構成比, 1)} %</td>
+          <td><div class="hbar"><div style="width:${w}%"></div></div></td></tr>`;
+      });
+      html += "</tbody></table></div>";
+      wrap.innerHTML = html;
+    }
+
+    const rows = Database.query(
+      "SELECT * FROM 査定返戻_自院記録 ORDER BY 年月 DESC, id DESC LIMIT 500"
+    );
+    $("#rec-count").textContent = `${rows.length} 件`;
+    let list =
+      '<div class="grid-scroll"><table><thead><tr><th>年月</th><th>制度</th><th>区分</th><th>審査機関</th><th>事由コード</th><th>事由</th><th class="num">件数</th><th class="num">点数/単位数</th><th>備考</th><th></th></tr></thead><tbody>';
+    if (!rows.length) list += '<tr><td colspan="10" class="hint">記録なし</td></tr>';
+    rows.forEach((r) => {
+      list += `<tr><td>${esc(r.年月)}</td><td>${esc(r.制度)}</td><td>${esc(r.区分)}</td><td>${esc(
+        r.審査機関
+      )}</td><td class="mono">${esc(r.事由コード)}</td><td class="note">${esc(
+        r.事由
+      )}</td><td class="num">${fmtNum(r.件数, 0)}</td><td class="num">${fmtNum(
+        r.点数_単位数,
+        0
+      )}</td><td class="note">${esc(r.備考)}</td>
+        <td><button class="btn danger small" data-del="${r.id}">削除</button></td></tr>`;
+    });
+    list += "</tbody></table></div>";
+    $("#rec-list").innerHTML = list;
   }
 
   /* ---------------- KPI ---------------- */

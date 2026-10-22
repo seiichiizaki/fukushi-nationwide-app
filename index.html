@@ -202,6 +202,65 @@
           <h3>都道府県 (支部) 別</h3>
           <div id="satei-prefs"></div>
 
+          <h3>査定事由・返戻事由 マスタ (医科レセプト / 介護保険 / 障害福祉)</h3>
+          <p class="hint">
+            医科は支払基金「増減点連絡書の見方」の事由記号 (A〜K) と返戻内訳書の事由コード、
+            介護・障害福祉は国保中央会「介護給付費請求の手引き」の返戻事由記号 (A〜E) と国保連のエラーコードを収録。
+            事由別の全国件数は公表されていないため、下の「自院の記録」で集計できます。
+          </p>
+          <div class="browse-controls">
+            <label>制度<select id="reason-filter-seido"></select></label>
+            <label>区分<select id="reason-filter-kubun"></select></label>
+            <label>検索<input id="reason-filter-q" type="text" placeholder="コード・内容で絞り込み" /></label>
+          </div>
+          <div id="satei-reasons"></div>
+
+          <h3>自院 (自事業所) の査定・返戻 記録 — 事由別集計</h3>
+          <form id="rec-form" class="calc-grid" autocomplete="off">
+            <label>審査年月<input id="rec-ym" type="month" required /></label>
+            <label>制度
+              <select id="rec-seido">
+                <option>医科レセプト</option>
+                <option>介護保険</option>
+                <option>障害福祉</option>
+              </select>
+            </label>
+            <label>区分
+              <select id="rec-kubun">
+                <option>査定</option>
+                <option>返戻</option>
+              </select>
+            </label>
+            <label>審査機関
+              <select id="rec-org">
+                <option>支払基金</option>
+                <option>国保連</option>
+              </select>
+            </label>
+            <label>事由コード<input id="rec-code" type="text" list="rec-code-list" placeholder="例: D / 12P0" /><datalist id="rec-code-list"></datalist></label>
+            <label>事由 (自由記載)<input id="rec-reason" type="text" placeholder="マスタにない場合" /></label>
+            <label>件数<input id="rec-cnt" type="number" min="0" step="1" required /></label>
+            <label>点数 / 単位数<input id="rec-pt" type="number" min="0" step="1" /></label>
+            <label>備考<input id="rec-note" type="text" /></label>
+            <div class="calc-action"><button type="submit" class="btn primary">記録を追加</button></div>
+          </form>
+          <div class="browse-controls">
+            <label>集計: 開始年月<input id="rec-from" type="month" /></label>
+            <label>終了年月<input id="rec-to" type="month" /></label>
+            <label>区分
+              <select id="rec-sum-kubun">
+                <option value="">(すべて)</option>
+                <option>査定</option>
+                <option>返戻</option>
+              </select>
+            </label>
+          </div>
+          <div id="rec-summary"></div>
+          <details class="rec-list">
+            <summary>記録一覧 <span id="rec-count" class="badge"></span></summary>
+            <div id="rec-list"></div>
+          </details>
+
           <h3>出典一覧</h3>
           <div id="satei-sources"></div>
         </div>
